@@ -6,6 +6,7 @@ pub mod history;
 use canvas::{Canvas, CanvasError};
 use change::{Change, ChangeEvent};
 use history::History;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct World {
     pub canvas: Canvas,
@@ -23,7 +24,7 @@ impl World {
 
     /// Apply a change event to the world
     pub fn apply_event(&mut self, event: ChangeEvent) -> Result<(), CanvasError> {
-        // Apply the event to the canvas
+
         match &event {
             ChangeEvent::Paint { x, y, color } => {
                 self.canvas.set_pixel(*x, *y, *color)?;
@@ -33,7 +34,6 @@ impl World {
             }
         }
 
-        // Record the change in history
         let change = Change {
             event,
             timestamp: self.get_current_timestamp(),
@@ -43,12 +43,12 @@ impl World {
         Ok(())
     }
 
-    /// Get the current timestamp (placeholder implementation)
+    /// Get the current Unix timestamp in milliseconds
     fn get_current_timestamp(&self) -> u64 {
-        // In a real implementation, you would use something like:
-        // std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
-        // For now, we'll use the change count as a simple timestamp
-        self.history.current_change_count() as u64
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time is before Unix epoch")
+            .as_millis() as u64
     }
 
     /// Get the canvas dimensions
