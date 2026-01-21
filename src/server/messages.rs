@@ -1,42 +1,37 @@
 use serde::{Deserialize, Serialize};
 
+/// Messages sent from client to server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
-    #[serde(rename = "chat")]
-    Chat { content: String },
+    #[serde(rename = "paint")]
+    Paint { x: usize, y: usize, color: String },
     
-    #[serde(rename = "draw")]
-    Draw { x: i32, y: i32, color: String },
-    
-    #[serde(rename = "clear")]
-    Clear,
+    #[serde(rename = "ping")]
+    Ping,
 }
 
+/// Messages sent from server to client
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
-    #[serde(rename = "chat")]
-    Chat { 
-        sender: String,
-        content: String 
+    #[serde(rename = "init")]
+    Init {
+        width: usize,
+        height: usize,
+        board: Vec<Vec<String>>,
+        cooldown: u64,
     },
     
-    #[serde(rename = "draw")]
-    Draw { 
-        sender: String,
-        x: i32, 
-        y: i32, 
-        color: String 
+    #[serde(rename = "update")]
+    Update {
+        x: usize,
+        y: usize,
+        color: String,
     },
     
-    #[serde(rename = "clear")]
-    Clear { 
-        sender: String 
-    },
-    
-    #[serde(rename = "error")]
-    Error { 
-        message: String 
+    #[serde(rename = "pong")]
+    Pong {
+        clients: usize,
     },
 }
