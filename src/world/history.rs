@@ -21,10 +21,15 @@ pub struct History {
 #[allow(dead_code)]
 impl History {
     /// Create a new history tracker with the specified snapshot interval
-    pub fn new(snapshot_interval: usize) -> Self {
+    pub fn new(snapshot_interval: usize, initial_canvas: &Canvas) -> Self {
+        let initial_snapshot = Snapshot {
+            canvas: initial_canvas.clone(),
+            change_count: 0,
+        };
+        
         History {
             changes: Vec::new(),
-            snapshots: Vec::new(),
+            snapshots: vec![initial_snapshot],
             snapshot_interval,
         }
     }
@@ -53,5 +58,28 @@ impl History {
             .iter()
             .filter(|s| s.change_count <= change_index)
             .max_by_key(|s| s.change_count)
+    }
+
+    /// Reconstruct a canvas from history by replaying all changes
+    pub fn reconstruct_canvas(&self) -> Canvas {
+        use super::change::ChangeEvent;
+        
+        // Always start from the last snapshot (there's always at least one)
+        let snapshot = self.snapshots.last().expect("History must have at least one snapshot");
+        let mut canvas = snapshot.canvas.clone();
+        
+        // Replay changes since the snapshot
+        for change in &self.changes[snapshot.change_count..] {
+            match &change.event {
+                ChangeEvent::Paint { x, y, color } => {
+                    let _ = canvas.set_pixel(*x, *y, *color);
+                }
+                ChangeEvent::Resize { anchor, width, height } => {
+                    let _ = canvas.resize(*width, *height, *anchor);
+                }
+            }
+        }
+        
+        canvas
     }
 }

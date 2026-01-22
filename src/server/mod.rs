@@ -20,8 +20,20 @@ pub struct Server {
 
 impl Server {
     pub fn new(addr: impl Into<String>) -> Self {
-        let world = World::with_loaded_history(128, 128, 100)
-            .expect("Failed to create world");
+        let history = match crate::world::persistence::load_history() {
+            Ok(history) if !history.snapshots.is_empty() => {
+                println!("Loaded history from disk");
+                history
+            }
+            _ => {
+                println!("No valid history found, creating new world");
+                let canvas = crate::world::canvas::Canvas::new(128, 128)
+                    .expect("Failed to create canvas");
+                crate::world::history::History::new(100, &canvas)
+            }
+        };
+        
+        let world = World::from(history);
         
         Self {
             addr: addr.into(),
