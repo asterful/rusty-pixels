@@ -2,35 +2,35 @@ use super::history::History;
 use std::fs::File;
 use std::io::{Read, Write};
 
-const HISTORY_FILE: &str = "history.bin";
-
 /// Save history to disk using binary format with atomic write
 pub fn save_history(history: &History) -> Result<(), Box<dyn std::error::Error>> {
-    const TEMP_FILE: &str = "history.bin.tmp";
-    const BACKUP_FILE: &str = "history.bin.bak";
+    let history_file = crate::env::persistence_path();
+    let temp_file = format!("{}.tmp", history_file);
+    let backup_file = format!("{}.bak", history_file);
     
     let serialized = bincode::serialize(history)?;
     
     // Write to temporary file
-    let mut file = File::create(TEMP_FILE)?;
+    let mut file = File::create(&temp_file)?;
     file.write_all(&serialized)?;
     file.sync_all()?; // Ensure data is written to disk
     drop(file);
     
     // Create backup of existing file if it exists
-    if std::path::Path::new(HISTORY_FILE).exists() {
-        std::fs::copy(HISTORY_FILE, BACKUP_FILE)?;
+    if std::path::Path::new(history_file).exists() {
+        std::fs::copy(history_file, &backup_file)?;
     }
     
     // Atomic rename
-    std::fs::rename(TEMP_FILE, HISTORY_FILE)?;
+    std::fs::rename(&temp_file, history_file)?;
     
     Ok(())
 }
 
 /// Load history from disk
 pub fn load_history() -> Result<History, Box<dyn std::error::Error>> {
-    let mut file = File::open(HISTORY_FILE)?;
+    let history_file = crate::env::persistence_path();
+    let mut file = File::open(history_file)?;
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
     let history = bincode::deserialize(&buffer)?;
