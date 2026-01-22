@@ -15,6 +15,7 @@ pub struct World {
     pub history: History,
 }
 
+#[allow(dead_code)]
 impl World {
     /// Create a new world with the given canvas dimensions and history snapshot interval
     pub fn new(width: usize, height: usize, snapshot_interval: usize) -> Result<Self, CanvasError> {

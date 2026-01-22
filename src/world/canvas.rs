@@ -3,6 +3,7 @@ use super::change::ResizeAnchor;
 use serde::{Serialize, Deserialize};
 
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum CanvasError {
     OutOfBounds { width: usize, height: usize },

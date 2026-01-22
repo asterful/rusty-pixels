@@ -18,6 +18,7 @@ pub struct History {
 }
 
 
+#[allow(dead_code)]
 impl History {
     /// Create a new history tracker with the specified snapshot interval
     pub fn new(snapshot_interval: usize) -> Self {
