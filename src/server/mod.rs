@@ -1,16 +1,27 @@
 mod messages;
 
 use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::{accept_async, tungstenite::Message};
+use tokio_tungstenite::tungstenite::Message;
 use futures_util::{StreamExt, SinkExt};
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 use std::collections::HashMap;
 use messages::{ClientMessage, ServerMessage};
 use crate::world::{World, color::Color};
 
-type Clients = Arc<RwLock<HashMap<SocketAddr, tokio::sync::mpsc::UnboundedSender<Message>>>>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    Admin,
+    Player,
+}
+
+struct ClientInfo {
+    sender: tokio::sync::mpsc::UnboundedSender<Message>,
+    role: Role,
+}
+
+type Clients = Arc<RwLock<HashMap<SocketAddr, ClientInfo>>>;
 
 pub struct Server {
     addr: String,
@@ -75,19 +86,55 @@ impl Server {
     }
 
     async fn handle_connection(stream: TcpStream, addr: SocketAddr, clients: Clients, world: Arc<RwLock<World>>) {
-        let ws_stream = match accept_async(stream).await {
+        use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
+        
+        // Extract query parameters from the WebSocket handshake
+        let query_params = Arc::new(Mutex::new(HashMap::new()));
+        let params_for_callback = query_params.clone();
+        
+        let ws_stream = match tokio_tungstenite::accept_hdr_async(stream, |req: &Request, resp: Response| {
+            // Extract query string from the request URI
+            if let Some(query_string) = req.uri().query() {
+                let mut params = HashMap::new();
+                for param in query_string.split('&') {
+                    if let Some((key, value)) = param.split_once('=') {
+                        params.insert(
+                            key.to_string(),
+                            urlencoding::decode(value).unwrap_or_default().to_string()
+                        );
+                    }
+                }
+                if let Ok(mut p) = params_for_callback.lock() {
+                    *p = params;
+                }
+            }
+            Ok(resp)
+        }).await {
             Ok(stream) => stream,
             Err(e) => {
                 eprintln!("WebSocket handshake failed with {}: {}", addr, e);
                 return;
             }
         };
+        
+        let query_params = query_params.lock().unwrap().clone();
+        println!("Query parameters for {}: {:?}", addr, query_params);
+
+        // Determine role based on auth parameter
+        let role = match query_params.get("auth") {
+            Some(token) if token == "test-token" => Role::Admin,
+            _ => Role::Player,
+        };
+        println!("Client {} connected as {:?}", addr, role);
 
         let (mut ws_sender, mut ws_receiver) = ws_stream.split();
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
-        // Store the client
-        clients.write().await.insert(addr, tx.clone());
+        // Store the client with their role
+        clients.write().await.insert(addr, ClientInfo {
+            sender: tx.clone(),
+            role,
+        });
 
         // Send init message immediately
         let init_msg = {
@@ -146,8 +193,8 @@ impl Server {
                     break;
                 }
                 Ok(Message::Ping(data)) => {
-                    if let Some(tx) = clients.read().await.get(&addr) {
-                        tx.send(Message::Pong(data)).ok();
+                    if let Some(client_info) = clients.read().await.get(&addr) {
+                        client_info.sender.send(Message::Pong(data)).ok();
                     }
                 }
                 Ok(Message::Pong(_)) => {}
@@ -230,8 +277,8 @@ impl Server {
                 };
                 
                 if let Ok(json) = serde_json::to_string(&pong_msg) {
-                    if let Some(tx) = clients.read().await.get(&sender) {
-                        tx.send(Message::Text(json)).ok();
+                    if let Some(client_info) = clients.read().await.get(&sender) {
+                        client_info.sender.send(Message::Text(json)).ok();
                     }
                 }
             }
@@ -240,17 +287,17 @@ impl Server {
 
     async fn broadcast_message(clients: &Clients, msg: Message, sender: SocketAddr) {
         let clients = clients.read().await;
-        for (addr, tx) in clients.iter() {
+        for (addr, client_info) in clients.iter() {
             if *addr != sender {
-                tx.send(msg.clone()).ok();
+                client_info.sender.send(msg.clone()).ok();
             }
         }
     }
     
     async fn broadcast_to_all(clients: &Clients, msg: Message) {
         let clients = clients.read().await;
-        for tx in clients.values() {
-            tx.send(msg.clone()).ok();
+        for client_info in clients.values() {
+            client_info.sender.send(msg.clone()).ok();
         }
     }
 }
