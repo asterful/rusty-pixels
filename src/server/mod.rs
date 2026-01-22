@@ -38,9 +38,14 @@ impl Server {
             }
             _ => {
                 println!("No valid history found, creating new world");
-                let canvas = crate::world::canvas::Canvas::new(128, 128)
-                    .expect("Failed to create canvas");
-                crate::world::history::History::new(100, &canvas)
+                let canvas = crate::world::canvas::Canvas::new(
+                    crate::env::default_canvas_width(),
+                    crate::env::default_canvas_height()
+                ).expect("Failed to create canvas");
+                crate::world::history::History::new(
+                    crate::env::default_snapshot_interval(),
+                    &canvas
+                )
             }
         };
         
@@ -122,7 +127,7 @@ impl Server {
 
         // Determine role based on auth parameter
         let role = match query_params.get("auth") {
-            Some(token) if token == "test-token" => Role::Admin,
+            Some(token) if token == crate::env::admin_token() => Role::Admin,
             _ => Role::Player,
         };
         println!("Client {} connected as {:?}", addr, role);
