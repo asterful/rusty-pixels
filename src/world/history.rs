@@ -1,13 +1,16 @@
 use super::canvas::Canvas;
 use super::change::Change;
+use serde::{Serialize, Deserialize};
 
 
+#[derive(Serialize, Deserialize)]
 pub struct Snapshot {
     pub canvas: Canvas,
     pub change_count: usize,
 }
 
 
+#[derive(Serialize, Deserialize)]
 pub struct History {
     pub snapshots: Vec<Snapshot>,
     pub changes: Vec<Change>,

@@ -20,7 +20,7 @@ pub struct Server {
 
 impl Server {
     pub fn new(addr: impl Into<String>) -> Self {
-        let world = World::new(128, 128, 100)
+        let world = World::with_loaded_history(128, 128, 100)
             .expect("Failed to create world");
         
         Self {
@@ -33,6 +33,21 @@ impl Server {
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let listener = TcpListener::bind(&self.addr).await?;
         println!("Server listening on {}", self.addr);
+
+        // Spawn periodic save task (saves every 30 seconds)
+        let world_for_save = self.world.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+            loop {
+                interval.tick().await;
+                let world_lock = world_for_save.read().await;
+                if let Err(e) = crate::world::persistence::save_history(&world_lock.history) {
+                    eprintln!("Failed to save history: {}", e);
+                } else {
+                    println!("History saved to disk");
+                }
+            }
+        });
 
         while let Ok((stream, addr)) = listener.accept().await {
             println!("New connection from {}", addr);
@@ -167,7 +182,12 @@ impl Server {
                 // Apply the paint operation
                 let result = {
                     let mut world_lock = world.write().await;
-                    world_lock.canvas.set_pixel(x, y, parsed_color)
+                    let paint_event = crate::world::change::ChangeEvent::Paint {
+                        x,
+                        y,
+                        color: parsed_color,
+                    };
+                    world_lock.apply_event(paint_event)
                 };
                 
                 match result {

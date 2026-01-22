@@ -1,6 +1,7 @@
 use super::color::Color;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ResizeAnchor {
     TopLeft,
     TopRight,
@@ -9,6 +10,7 @@ pub enum ResizeAnchor {
     Center,
 }
 
+#[derive(Serialize, Deserialize)]
 pub enum ChangeEvent {
     Paint {
         x: usize,
@@ -22,6 +24,7 @@ pub enum ChangeEvent {
     },
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Change {
     pub event: ChangeEvent,
     pub timestamp: u64,

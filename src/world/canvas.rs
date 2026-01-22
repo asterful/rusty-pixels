@@ -1,5 +1,6 @@
 use super::color::Color;
 use super::change::ResizeAnchor;
+use serde::{Serialize, Deserialize};
 
 
 #[derive(Debug)]
@@ -9,7 +10,7 @@ pub enum CanvasError {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Canvas {
     width: usize,
     height: usize,
