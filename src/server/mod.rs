@@ -94,14 +94,17 @@ impl Server {
         let width = world.canvas.width();
         let height = world.canvas.height();
         
-        // Optimized: colors already stored as strings, just clone references
+        // Get palette and pixel indices
         let pixels = world.canvas.pixels();
-        let board: Vec<String> = pixels.iter().map(|c| c.to_hex().to_string()).collect();
+        let palette_lock = world.canvas.palette();
+        let palette = palette_lock.read().unwrap();
+        let palette_colors = palette.colors().to_vec();
         
         ServerMessage::Init {
             width,
             height,
-            board,
+            palette: palette_colors,
+            board: pixels.to_vec(),
             cooldown: 0,
         }
     }

@@ -456,10 +456,11 @@
             state.board.height = msg.height;
             bufferCanvas.width = msg.width;
             bufferCanvas.height = msg.height;
-            // board is now a flat array: pixels[y * width + x]
+            // board is now palette indices, palette contains the actual colors
             for (let y = 0; y < msg.height; y++) {
                 for (let x = 0; x < msg.width; x++) {
-                    const color = msg.board[y * msg.width + x];
+                    const paletteIndex = msg.board[y * msg.width + x];
+                    const color = msg.palette[paletteIndex];
                     bufferCtx.fillStyle = color;
                     bufferCtx.fillRect(x, y, 1, 1);
                 }

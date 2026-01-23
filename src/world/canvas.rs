@@ -1,6 +1,9 @@
 use super::color::Color;
 use super::change::ResizeAnchor;
+use super::palette::Palette;
 use serde::{Serialize, Deserialize};
+use std::sync::Arc;
+use std::sync::RwLock;
 
 
 #[allow(dead_code)]
@@ -15,7 +18,9 @@ pub enum CanvasError {
 pub struct Canvas {
     width: usize,
     height: usize,
-    pixels: Vec<Color>,
+    pixels: Vec<u32>,  // Store palette indices instead of colors
+    #[serde(skip)]
+    palette: Arc<RwLock<Palette>>,
 }
 
 
@@ -26,10 +31,29 @@ impl Canvas {
             return Err(CanvasError::InvalidDimensions { width, height });
         }
 
+        let palette = Arc::new(RwLock::new(Palette::new()));
+        // White is always index 0 in new palette
+        
         Ok(Self {
             width,
             height,
-            pixels: vec![Color::white(); width * height],
+            pixels: vec![0; width * height],  // 0 = white
+            palette,
+        })
+    }
+    
+    #[allow(dead_code)]
+    /// Create canvas with existing palette
+    pub fn with_palette(width: usize, height: usize, palette: Arc<RwLock<Palette>>) -> Result<Self, CanvasError> {
+        if width == 0 || height == 0 {
+            return Err(CanvasError::InvalidDimensions { width, height });
+        }
+        
+        Ok(Self {
+            width,
+            height,
+            pixels: vec![0; width * height],
+            palette,
         })
     }
 
@@ -53,10 +77,15 @@ impl Canvas {
         }
 
         let index = y * self.width + x;
-        self.pixels[index] = color;
+        let color_index = {
+            let mut palette = self.palette.write().unwrap();
+            palette.add_color(color.to_hex().to_string())
+        };
+        self.pixels[index] = color_index;
         Ok(())
     }
 
+    #[allow(dead_code)]
     /// Get the color of the pixel at (x, y)
     pub fn get_pixel(&self, x: usize, y: usize) -> Result<Color, CanvasError> {
         if x >= self.width || y >= self.height {
@@ -67,12 +96,20 @@ impl Canvas {
         }
 
         let index = y * self.width + x;
-        Ok(self.pixels[index].clone())
+        let color_index = self.pixels[index];
+        let palette = self.palette.read().unwrap();
+        let hex = palette.get_color(color_index).unwrap_or("#FFFFFF");
+        Color::from_hex(hex).map_err(|_| CanvasError::OutOfBounds { width: self.width, height: self.height })
     }
 
-    /// Get direct access to the pixels slice (row-major order)
-    pub fn pixels(&self) -> &[Color] {
+    /// Get direct access to the pixels slice (row-major order of palette indices)
+    pub fn pixels(&self) -> &[u32] {
         &self.pixels
+    }
+    
+    /// Get the palette
+    pub fn palette(&self) -> Arc<RwLock<Palette>> {
+        self.palette.clone()
     }
 
     /// Resize the canvas to new dimensions, anchoring the existing content
@@ -84,7 +121,7 @@ impl Canvas {
             });
         }
 
-        let mut new_pixels = vec![Color::white(); new_width * new_height];
+        let mut new_pixels = vec![0u32; new_width * new_height];  // 0 = white/default
 
         let (offset_x, offset_y) = match anchor {
             ResizeAnchor::TopLeft => (0, 0),
@@ -102,7 +139,7 @@ impl Canvas {
                 if new_x < new_width && new_y < new_height {
                     let old_index = y * self.width + x;
                     let new_index = new_y * new_width + new_x;
-                    new_pixels[new_index] = self.pixels[old_index].clone();
+                    new_pixels[new_index] = self.pixels[old_index];
                 }
             }
         }

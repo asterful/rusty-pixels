@@ -165,7 +165,8 @@
                     
                     boardWidth = msg.width;
                     boardHeight = msg.height;
-                    board = msg.board; // flat array now
+                    board = msg.board; // flat array of palette indices
+                    window.palette = msg.palette; // store palette globally
                     
                     // Update canvas element size to match board dimensions
                     canvas.width = boardWidth * pixelSize;
@@ -176,9 +177,10 @@
                     if (wasResize) {
                         log(`Canvas resized to ${boardWidth}x${boardHeight} - board updated`, 'info');
                     } else {
-                        log(`Board initialized: ${boardWidth}x${boardHeight}`);
+                        log(`Board initialized: ${boardWidth}x${boardHeight}, Palette: ${msg.palette.length} colors`);
                     }
                 } else if (msg.type === 'update') {
+                    // Updates still send color strings directly
                     board[msg.y * boardWidth + msg.x] = msg.color;
                     drawPixel(msg.x, msg.y, msg.color);
                 } else if (msg.type === 'pong') {
@@ -266,7 +268,10 @@
             
             for (let y = 0; y < boardHeight; y++) {
                 for (let x = 0; x < boardWidth; x++) {
-                    drawPixel(x, y, board[y * boardWidth + x]);
+                    const value = board[y * boardWidth + x];
+                    // Check if value is a palette index (number) or color string
+                    const color = typeof value === 'number' ? window.palette[value] : value;
+                    drawPixel(x, y, color);
                 }
             }
         }

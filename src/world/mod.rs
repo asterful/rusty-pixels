@@ -3,6 +3,7 @@ pub mod change;
 pub mod color;
 pub mod history;
 pub mod persistence;
+pub mod palette;
 
 use canvas::{Canvas, CanvasError};
 use change::{Change, ChangeEvent};
