@@ -3,6 +3,17 @@ use super::change::Change;
 use serde::{Serialize, Deserialize};
 
 
+#[derive(Debug)]
+pub enum RollbackError {
+    IndexOutOfBounds {
+        #[allow(dead_code)]
+        target: usize,
+        #[allow(dead_code)]
+        max: usize,
+    },
+}
+
+
 #[derive(Serialize, Deserialize)]
 pub struct Snapshot {
     pub canvas: Canvas,
@@ -81,5 +92,30 @@ impl History {
         }
         
         canvas
+    }
+
+    /// Rollback to a specific change index (destructive)
+    /// Index is 0-based. Truncates all changes after target_index.
+    pub fn rollback_to_index(&mut self, target_index: usize) -> Result<(), RollbackError> {
+        if target_index >= self.changes.len() {
+            return Err(RollbackError::IndexOutOfBounds {
+                target: target_index,
+                max: self.changes.len().saturating_sub(1),
+            });
+        }
+        
+        // Truncate changes to keep only up to and including target
+        self.changes.truncate(target_index + 1);
+        let new_change_count = self.changes.len();
+        
+        // Remove snapshots that are after the new change count
+        self.snapshots.retain(|snapshot| snapshot.change_count <= new_change_count);
+        
+        // Ensure we always have at least the initial snapshot
+        if self.snapshots.is_empty() {
+            panic!("History must always have at least one snapshot");
+        }
+        
+        Ok(())
     }
 }

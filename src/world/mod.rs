@@ -68,4 +68,13 @@ impl World {
     pub fn change_count(&self) -> usize {
         self.history.current_change_count()
     }
+
+    /// Rollback the world to a specific change index (destructive)
+    /// Index is 0-based. Returns error if index is out of bounds.
+    pub fn rollback_to_index(&mut self, target_index: usize) -> Result<(), history::RollbackError> {
+        self.history.rollback_to_index(target_index)?;
+        // Reconstruct the canvas from the truncated history
+        self.canvas = self.history.reconstruct_canvas();
+        Ok(())
+    }
 }
