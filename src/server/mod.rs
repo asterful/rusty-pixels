@@ -94,17 +94,9 @@ impl Server {
         let width = world.canvas.width();
         let height = world.canvas.height();
         
-        // Build the 2D board array
-        let mut board = Vec::with_capacity(height);
-        for y in 0..height {
-            let mut row = Vec::with_capacity(width);
-            for x in 0..width {
-                let color = world.canvas.get_pixel(x, y)
-                    .unwrap_or(Color::white());
-                row.push(color.to_hex());
-            }
-            board.push(row);
-        }
+        // Optimized: flat array, client reconstructs 2D with pixels[y * width + x]
+        let pixels = world.canvas.pixels();
+        let board: Vec<String> = pixels.iter().map(|c| c.to_hex()).collect();
         
         ServerMessage::Init {
             width,

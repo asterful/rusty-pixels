@@ -26,7 +26,7 @@ pub enum ServerMessage {
     Init {
         width: usize,
         height: usize,
-        board: Vec<Vec<String>>,
+        board: Vec<String>,
         cooldown: u64,
     },
     

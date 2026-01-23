@@ -165,7 +165,7 @@
                     
                     boardWidth = msg.width;
                     boardHeight = msg.height;
-                    board = msg.board;
+                    board = msg.board; // flat array now
                     
                     // Update canvas element size to match board dimensions
                     canvas.width = boardWidth * pixelSize;
@@ -179,7 +179,7 @@
                         log(`Board initialized: ${boardWidth}x${boardHeight}`);
                     }
                 } else if (msg.type === 'update') {
-                    board[msg.y][msg.x] = msg.color;
+                    board[msg.y * boardWidth + msg.x] = msg.color;
                     drawPixel(msg.x, msg.y, msg.color);
                 } else if (msg.type === 'pong') {
                     document.getElementById('clientCount').textContent = `Clients: ${msg.clients}`;
@@ -266,7 +266,7 @@
             
             for (let y = 0; y < boardHeight; y++) {
                 for (let x = 0; x < boardWidth; x++) {
-                    drawPixel(x, y, board[y][x]);
+                    drawPixel(x, y, board[y * boardWidth + x]);
                 }
             }
         }

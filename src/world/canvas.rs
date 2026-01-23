@@ -70,6 +70,11 @@ impl Canvas {
         Ok(self.pixels[index])
     }
 
+    /// Get direct access to the pixels slice (row-major order)
+    pub fn pixels(&self) -> &[Color] {
+        &self.pixels
+    }
+
     /// Resize the canvas to new dimensions, anchoring the existing content
     pub fn resize(&mut self, new_width: usize, new_height: usize, anchor: ResizeAnchor) -> Result<(), CanvasError> {
         if new_width == 0 || new_height == 0 {
