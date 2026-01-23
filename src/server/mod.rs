@@ -94,9 +94,9 @@ impl Server {
         let width = world.canvas.width();
         let height = world.canvas.height();
         
-        // Optimized: flat array, client reconstructs 2D with pixels[y * width + x]
+        // Optimized: colors already stored as strings, just clone references
         let pixels = world.canvas.pixels();
-        let board: Vec<String> = pixels.iter().map(|c| c.to_hex()).collect();
+        let board: Vec<String> = pixels.iter().map(|c| c.to_hex().to_string()).collect();
         
         ServerMessage::Init {
             width,
@@ -240,6 +240,7 @@ impl Server {
                 };
                 
                 // Apply the paint operation
+                let color_for_broadcast = parsed_color.clone();
                 let result = {
                     let mut world_lock = world.write().await;
                     let paint_event = crate::world::change::ChangeEvent::Paint {
@@ -256,7 +257,7 @@ impl Server {
                         let update_msg = ServerMessage::Update {
                             x,
                             y,
-                            color: parsed_color.to_hex(),
+                            color: color_for_broadcast.to_hex().to_string(),
                         };
                         
                         if let Ok(json) = serde_json::to_string(&update_msg) {

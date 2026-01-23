@@ -83,7 +83,7 @@ impl History {
         for change in &self.changes[snapshot.change_count..] {
             match &change.event {
                 ChangeEvent::Paint { x, y, color } => {
-                    let _ = canvas.set_pixel(*x, *y, *color);
+                    let _ = canvas.set_pixel(*x, *y, color.clone());
                 }
                 ChangeEvent::Resize { anchor, width, height } => {
                     let _ = canvas.resize(*width, *height, *anchor);

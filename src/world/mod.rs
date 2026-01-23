@@ -35,7 +35,7 @@ impl World {
 
         match &event {
             ChangeEvent::Paint { x, y, color } => {
-                self.canvas.set_pixel(*x, *y, *color)?;
+                self.canvas.set_pixel(*x, *y, color.clone())?;
             }
             ChangeEvent::Resize { anchor, width, height } => {
                 self.canvas.resize(*width, *height, *anchor)?;

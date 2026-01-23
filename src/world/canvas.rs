@@ -67,7 +67,7 @@ impl Canvas {
         }
 
         let index = y * self.width + x;
-        Ok(self.pixels[index])
+        Ok(self.pixels[index].clone())
     }
 
     /// Get direct access to the pixels slice (row-major order)
@@ -102,7 +102,7 @@ impl Canvas {
                 if new_x < new_width && new_y < new_height {
                     let old_index = y * self.width + x;
                     let new_index = new_y * new_width + new_x;
-                    new_pixels[new_index] = self.pixels[old_index];
+                    new_pixels[new_index] = self.pixels[old_index].clone();
                 }
             }
         }
