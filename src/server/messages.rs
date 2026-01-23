@@ -13,6 +13,9 @@ pub enum ClientMessage {
     
     #[serde(rename = "resize")]
     Resize { width: usize, height: usize, anchor: ResizeAnchor },
+    
+    #[serde(rename = "rollback")]
+    Rollback { target_index: usize },
 }
 
 /// Messages sent from server to client

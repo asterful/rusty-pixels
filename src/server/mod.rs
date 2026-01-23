@@ -270,8 +270,6 @@ impl Server {
                         if let Ok(json) = serde_json::to_string(&update_msg) {
                             Self::broadcast_to_all(clients, Message::Text(json)).await;
                         }
-                        
-                        println!("Paint at ({}, {}) with color {} by {}", x, y, parsed_color.to_hex(), sender);
                     }
                     Err(e) => {
                         eprintln!("Failed to paint pixel from {}: {:?}", sender, e);
@@ -338,6 +336,45 @@ impl Server {
                     }
                     Err(e) => {
                         eprintln!("Failed to resize canvas from {}: {:?}", sender, e);
+                    }
+                }
+            }
+            ClientMessage::Rollback { target_index } => {
+                // Check if sender is admin
+                let is_admin = {
+                    let clients_lock = clients.read().await;
+                    clients_lock.get(&sender)
+                        .map(|info| info.role == Role::Admin)
+                        .unwrap_or(false)
+                };
+                
+                if !is_admin {
+                    eprintln!("Non-admin client {} attempted to rollback canvas", sender);
+                    return;
+                }
+                
+                // Apply the rollback operation
+                let result = {
+                    let mut world_lock = world.write().await;
+                    world_lock.rollback_to_index(target_index)
+                };
+                
+                match result {
+                    Ok(_) => {
+                        // Send new Init message to all clients with rolled-back board state
+                        let init_msg = {
+                            let world_lock = world.read().await;
+                            Self::build_init_message(&world_lock)
+                        };
+                        
+                        if let Ok(json) = serde_json::to_string(&init_msg) {
+                            Self::broadcast_to_all(clients, Message::Text(json)).await;
+                        }
+                        
+                        println!("Canvas rolled back to index {} by admin {}", target_index, sender);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to rollback canvas from {}: {:?}", sender, e);
                     }
                 }
             }

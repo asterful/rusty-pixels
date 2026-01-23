@@ -89,6 +89,12 @@
             </select>
         </label>
         <button onclick="resizeCanvas()">Resize Canvas</button>
+        <br><br>
+        <label>
+            Rollback to index: <input type="number" id="rollbackIndex" value="0" min="0" style="width: 80px;">
+        </label>
+        <button onclick="rollbackCanvas()">Rollback</button>
+        <span id="changeCount" style="margin-left: 10px; color: #666;"></span>
     </div>
 
     <canvas id="canvas" width="512" height="512"></canvas>
@@ -228,6 +234,27 @@
                 width: width,
                 height: height,
                 anchor: anchor
+            };
+            ws.send(JSON.stringify(msg));
+            log(`Sent: ${JSON.stringify(msg)}`, 'sent');
+        }
+
+        function rollbackCanvas() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const targetIndex = parseInt(document.getElementById('rollbackIndex').value);
+            
+            if (targetIndex < 0) {
+                log('Invalid rollback index', 'error');
+                return;
+            }
+            
+            const msg = {
+                type: 'rollback',
+                target_index: targetIndex
             };
             ws.send(JSON.stringify(msg));
             log(`Sent: ${JSON.stringify(msg)}`, 'sent');
