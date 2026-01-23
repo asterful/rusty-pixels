@@ -5,6 +5,7 @@ static DEFAULT_CANVAS_WIDTH: OnceLock<usize> = OnceLock::new();
 static DEFAULT_CANVAS_HEIGHT: OnceLock<usize> = OnceLock::new();
 static DEFAULT_SNAPSHOT_INTERVAL: OnceLock<usize> = OnceLock::new();
 static PERSISTENCE_PATH: OnceLock<String> = OnceLock::new();
+static AUTOSAVE_INTERVAL: OnceLock<u64> = OnceLock::new();
 
 pub fn init() {
     // Load environment variables from .env file
@@ -31,6 +32,12 @@ pub fn init() {
     let persistence_path = std::env::var("PERSISTENCE_PATH")
         .unwrap_or_else(|_| "history.bin".to_string());
     
+    let autosave_interval = std::env::var("AUTOSAVE_INTERVAL")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(30);
+    
+    AUTOSAVE_INTERVAL.set(autosave_interval).expect("Failed to set AUTOSAVE_INTERVAL");
     ADMIN_TOKEN.set(token).expect("Failed to set ADMIN_TOKEN");
     DEFAULT_CANVAS_WIDTH.set(width).expect("Failed to set DEFAULT_CANVAS_WIDTH");
     DEFAULT_CANVAS_HEIGHT.set(height).expect("Failed to set DEFAULT_CANVAS_HEIGHT");
@@ -59,4 +66,8 @@ pub fn default_snapshot_interval() -> usize {
 
 pub fn persistence_path() -> &'static str {
     PERSISTENCE_PATH.get().expect("Environment not initialized. Call env::init() first")
+}
+
+pub fn autosave_interval() -> u64 {
+    *AUTOSAVE_INTERVAL.get().expect("Environment not initialized. Call env::init() first")
 }

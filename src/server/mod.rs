@@ -62,10 +62,10 @@ impl Server {
         let listener = TcpListener::bind(&self.addr).await?;
         println!("Server listening on {}", self.addr);
 
-        // Spawn periodic save task (saves every 30 seconds)
+        // Spawn periodic save task
         let world_for_save = self.world.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(crate::env::autosave_interval()));
             loop {
                 interval.tick().await;
                 let world_lock = world_for_save.read().await;
