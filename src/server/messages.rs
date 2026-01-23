@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::world::change::ResizeAnchor;
 
 /// Messages sent from client to server
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,6 +10,9 @@ pub enum ClientMessage {
     
     #[serde(rename = "ping")]
     Ping,
+    
+    #[serde(rename = "resize")]
+    Resize { width: usize, height: usize, anchor: ResizeAnchor },
 }
 
 /// Messages sent from server to client

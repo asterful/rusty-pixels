@@ -60,11 +60,35 @@
         <label>
             Color: <input type="color" id="colorPicker" value="#FF0000">
         </label>
+        <label>
+            <input type="checkbox" id="adminMode"> Admin Mode
+        </label>
         <button id="connectBtn" onclick="connect()">Connect</button>
         <button onclick="disconnect()">Disconnect</button>
         <button onclick="ping()">Ping</button>
         <button onclick="clearLog()">Clear Log</button>
         <span id="clientCount"></span>
+    </div>
+
+    <div class="controls" id="adminControls" style="display: none; border-top: 2px solid #ccc; padding-top: 10px;">
+        <strong>Admin Controls:</strong><br>
+        <label>
+            Width: <input type="number" id="resizeWidth" value="128" min="1" max="1024" style="width: 80px;">
+        </label>
+        <label>
+            Height: <input type="number" id="resizeHeight" value="128" min="1" max="1024" style="width: 80px;">
+        </label>
+        <label>
+            Anchor:
+            <select id="resizeAnchor">
+                <option value="TopLeft">Top Left</option>
+                <option value="TopRight">Top Right</option>
+                <option value="BottomLeft">Bottom Left</option>
+                <option value="BottomRight">Bottom Right</option>
+                <option value="Center" selected>Center</option>
+            </select>
+        </label>
+        <button onclick="resizeCanvas()">Resize Canvas</button>
     </div>
 
     <canvas id="canvas" width="512" height="512"></canvas>
@@ -101,11 +125,29 @@
                 return;
             }
 
-            ws = new WebSocket('ws://127.0.0.1:8080');
+            const isAdmin = document.getElementById('adminMode').checked;
+            let wsUrl = 'ws://127.0.0.1:8080';
+            
+            if (isAdmin) {
+                // Use the admin token from environment
+                wsUrl += '?auth=test_admin_token_123';
+                log('Connecting as ADMIN...');
+            } else {
+                log('Connecting as PLAYER...');
+            }
+
+            ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
                 log('Connected to server');
                 updateStatus(true);
+                
+                // Show admin controls if connected as admin
+                if (isAdmin) {
+                    document.getElementById('adminControls').style.display = 'block';
+                } else {
+                    document.getElementById('adminControls').style.display = 'none';
+                }
             };
 
             ws.onmessage = (event) => {
@@ -113,11 +155,23 @@
                 log(`Received: ${JSON.stringify(msg)}`);
 
                 if (msg.type === 'init') {
+                    const wasResize = (boardWidth !== msg.width || boardHeight !== msg.height) && board.length > 0;
+                    
                     boardWidth = msg.width;
                     boardHeight = msg.height;
                     board = msg.board;
+                    
+                    // Update canvas element size to match board dimensions
+                    canvas.width = boardWidth * pixelSize;
+                    canvas.height = boardHeight * pixelSize;
+                    
                     drawBoard();
-                    log(`Board initialized: ${boardWidth}x${boardHeight}`);
+                    
+                    if (wasResize) {
+                        log(`Canvas resized to ${boardWidth}x${boardHeight} - board updated`, 'info');
+                    } else {
+                        log(`Board initialized: ${boardWidth}x${boardHeight}`);
+                    }
                 } else if (msg.type === 'update') {
                     board[msg.y][msg.x] = msg.color;
                     drawPixel(msg.x, msg.y, msg.color);
@@ -150,6 +204,31 @@
                 return;
             }
             const msg = { type: 'ping' };
+            ws.send(JSON.stringify(msg));
+            log(`Sent: ${JSON.stringify(msg)}`, 'sent');
+        }
+
+        function resizeCanvas() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected', 'error');
+                return;
+            }
+            
+            const width = parseInt(document.getElementById('resizeWidth').value);
+            const height = parseInt(document.getElementById('resizeHeight').value);
+            const anchor = document.getElementById('resizeAnchor').value;
+            
+            if (width <= 0 || height <= 0) {
+                log('Invalid dimensions', 'error');
+                return;
+            }
+            
+            const msg = {
+                type: 'resize',
+                width: width,
+                height: height,
+                anchor: anchor
+            };
             ws.send(JSON.stringify(msg));
             log(`Sent: ${JSON.stringify(msg)}`, 'sent');
         }

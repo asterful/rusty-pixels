@@ -90,6 +90,30 @@ impl Server {
         Ok(())
     }
 
+    fn build_init_message(world: &World) -> ServerMessage {
+        let width = world.canvas.width();
+        let height = world.canvas.height();
+        
+        // Build the 2D board array
+        let mut board = Vec::with_capacity(height);
+        for y in 0..height {
+            let mut row = Vec::with_capacity(width);
+            for x in 0..width {
+                let color = world.canvas.get_pixel(x, y)
+                    .unwrap_or(Color::white());
+                row.push(color.to_hex());
+            }
+            board.push(row);
+        }
+        
+        ServerMessage::Init {
+            width,
+            height,
+            board,
+            cooldown: 0,
+        }
+    }
+
     async fn handle_connection(stream: TcpStream, addr: SocketAddr, clients: Clients, world: Arc<RwLock<World>>) {
         use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
         
@@ -144,27 +168,7 @@ impl Server {
         // Send init message immediately
         let init_msg = {
             let world_lock = world.read().await;
-            let width = world_lock.canvas.width();
-            let height = world_lock.canvas.height();
-            
-            // Build the 2D board array
-            let mut board = Vec::with_capacity(height);
-            for y in 0..height {
-                let mut row = Vec::with_capacity(width);
-                for x in 0..width {
-                    let color = world_lock.canvas.get_pixel(x, y)
-                        .unwrap_or(Color::white());
-                    row.push(color.to_hex());
-                }
-                board.push(row);
-            }
-            
-            ServerMessage::Init {
-                width,
-                height,
-                board,
-                cooldown: 0,
-            }
+            Self::build_init_message(&world_lock)
         };
         
         if let Ok(json) = serde_json::to_string(&init_msg) {
@@ -284,6 +288,56 @@ impl Server {
                 if let Ok(json) = serde_json::to_string(&pong_msg) {
                     if let Some(client_info) = clients.read().await.get(&sender) {
                         client_info.sender.send(Message::Text(json)).ok();
+                    }
+                }
+            }
+            ClientMessage::Resize { width, height, anchor } => {
+                // Check if sender is admin
+                let is_admin = {
+                    let clients_lock = clients.read().await;
+                    clients_lock.get(&sender)
+                        .map(|info| info.role == Role::Admin)
+                        .unwrap_or(false)
+                };
+                
+                if !is_admin {
+                    eprintln!("Non-admin client {} attempted to resize canvas", sender);
+                    return;
+                }
+                
+                // Validate dimensions
+                if width == 0 || height == 0 {
+                    eprintln!("Invalid resize dimensions from {}: {}x{}", sender, width, height);
+                    return;
+                }
+                
+                // Apply the resize operation
+                let result = {
+                    let mut world_lock = world.write().await;
+                    let resize_event = crate::world::change::ChangeEvent::Resize {
+                        anchor,
+                        width,
+                        height,
+                    };
+                    world_lock.apply_event(resize_event)
+                };
+                
+                match result {
+                    Ok(_) => {
+                        // Send new Init message to all clients with updated board state
+                        let init_msg = {
+                            let world_lock = world.read().await;
+                            Self::build_init_message(&world_lock)
+                        };
+                        
+                        if let Ok(json) = serde_json::to_string(&init_msg) {
+                            Self::broadcast_to_all(clients, Message::Text(json)).await;
+                        }
+                        
+                        println!("Canvas resized to {}x{} with anchor {:?} by admin {}", width, height, anchor, sender);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to resize canvas from {}: {:?}", sender, e);
                     }
                 }
             }
