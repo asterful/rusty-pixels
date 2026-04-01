@@ -1,4 +1,5 @@
 mod messages;
+mod rate_limit;
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
@@ -183,11 +184,17 @@ impl Server {
             }
         });
 
+
+        let mut rate_limiter = rate_limit::RateLimiter::new(
+            crate::env::rate_limit_tokens(),
+            crate::env::rate_limit_refill_rate_ms()
+        );
+
         // Handle incoming messages
         while let Some(msg) = ws_receiver.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
-                    Self::handle_json_message(&clients, &world, &text, addr).await;
+                    Self::handle_json_message(&clients, &world, &text, addr, &mut rate_limiter).await;
                 }
                 Ok(Message::Binary(bin)) => {
                     Self::broadcast_message(&clients, Message::Binary(bin), addr).await;
@@ -216,7 +223,7 @@ impl Server {
         clients.write().await.remove(&addr);
     }
 
-    async fn handle_json_message(clients: &Clients, world: &Arc<RwLock<World>>, text: &str, sender: SocketAddr) {
+    async fn handle_json_message(clients: &Clients, world: &Arc<RwLock<World>>, text: &str, sender: SocketAddr, rate_limiter: &mut rate_limit::RateLimiter) {
         let client_msg: ClientMessage = match serde_json::from_str(text) {
             Ok(msg) => msg,
             Err(e) => {
@@ -227,6 +234,17 @@ impl Server {
 
         match client_msg {
             ClientMessage::Paint { x, y, color } => {
+                let is_admin = {
+                    let clients_lock = clients.read().await;
+                    clients_lock.get(&sender).map(|info| info.role == Role::Admin).unwrap_or(false)
+                };
+
+                // Enforce rate limit for non-admin clients
+                if !is_admin && !rate_limiter.take() {
+                    eprintln!("Rate limit exceeded for client {}", sender);
+                    return;
+                }
+
                 // Validate color format
                 if !color.starts_with('#') || color.len() != 7 {
                     eprintln!("Invalid color format from {}: {}", sender, color);

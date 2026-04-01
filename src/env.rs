@@ -6,6 +6,8 @@ static DEFAULT_CANVAS_HEIGHT: OnceLock<usize> = OnceLock::new();
 static DEFAULT_SNAPSHOT_INTERVAL: OnceLock<usize> = OnceLock::new();
 static PERSISTENCE_PATH: OnceLock<String> = OnceLock::new();
 static AUTOSAVE_INTERVAL: OnceLock<u64> = OnceLock::new();
+static RATE_LIMIT_TOKENS: OnceLock<f64> = OnceLock::new();
+static RATE_LIMIT_REFILL_RATE_MS: OnceLock<f64> = OnceLock::new();
 
 pub fn init() {
     // Load environment variables from .env file
@@ -36,8 +38,20 @@ pub fn init() {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(30);
+
+    let rate_limit_tokens = std::env::var("RATE_LIMIT_TOKENS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5.0);
+        
+    let rate_limit_refill_rate_ms = std::env::var("RATE_LIMIT_REFILL_RATE_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(200.0);
     
     AUTOSAVE_INTERVAL.set(autosave_interval).expect("Failed to set AUTOSAVE_INTERVAL");
+    RATE_LIMIT_TOKENS.set(rate_limit_tokens).expect("Failed to set RATE_LIMIT_TOKENS");
+    RATE_LIMIT_REFILL_RATE_MS.set(rate_limit_refill_rate_ms).expect("Failed to set RATE_LIMIT_REFILL_RATE_MS");
     ADMIN_TOKEN.set(token).expect("Failed to set ADMIN_TOKEN");
     DEFAULT_CANVAS_WIDTH.set(width).expect("Failed to set DEFAULT_CANVAS_WIDTH");
     DEFAULT_CANVAS_HEIGHT.set(height).expect("Failed to set DEFAULT_CANVAS_HEIGHT");
@@ -70,4 +84,12 @@ pub fn persistence_path() -> &'static str {
 
 pub fn autosave_interval() -> u64 {
     *AUTOSAVE_INTERVAL.get().expect("Environment not initialized. Call env::init() first")
+}
+
+pub fn rate_limit_tokens() -> f64 {
+    *RATE_LIMIT_TOKENS.get().expect("Environment not initialized. Call env::init() first")
+}
+
+pub fn rate_limit_refill_rate_ms() -> f64 {
+    *RATE_LIMIT_REFILL_RATE_MS.get().expect("Environment not initialized. Call env::init() first")
 }
