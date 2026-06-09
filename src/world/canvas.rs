@@ -90,7 +90,7 @@ impl Canvas {
 
         let index = y * self.width + x;
         let color_index = self.pixels[index];
-        let palette = self.palette.read().unwrap();
+        let palette = self.palette;
         let hex = self.palette.get_color(color_index).unwrap_or("#FFFFFF");
         Color::from_hex(hex).map_err(|_| CanvasError::OutOfBounds { width: self.width, height: self.height })
     }
