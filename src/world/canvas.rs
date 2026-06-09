@@ -101,7 +101,7 @@ impl Canvas {
     }
     
     /// Get the palette
-    pub fn palette(&self) -> Arc<RwLock<Palette>> {
+    pub fn palette(&self) -> &Palette {
         &self.palette
     }
 
