@@ -26,12 +26,14 @@ impl Canvas {
         if width == 0 || height == 0 {
             return Err(CanvasError::InvalidDimensions { width, height });
         }
+
+        let palette = Palette::new();
         
         Ok(Self {
             width,
             height,
             pixels: vec![0; width * height],  // 0 = white
-            Palette::new()
+            palette
         })
     }
     
