@@ -40,7 +40,7 @@ impl Canvas {
     
     #[allow(dead_code)]
     /// Create canvas with existing palette
-    pub fn with_palette(width: usize, height: usize, palette: Arc<RwLock<Palette>>) -> Result<Self, CanvasError> {
+    pub fn with_palette(width: usize, height: usize, palette: Palette) -> Result<Self, CanvasError> {
         if width == 0 || height == 0 {
             return Err(CanvasError::InvalidDimensions { width, height });
         }
@@ -90,7 +90,6 @@ impl Canvas {
 
         let index = y * self.width + x;
         let color_index = self.pixels[index];
-        let palette = self.palette;
         let hex = self.palette.get_color(color_index).unwrap_or("#FFFFFF");
         Color::from_hex(hex).map_err(|_| CanvasError::OutOfBounds { width: self.width, height: self.height })
     }
