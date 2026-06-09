@@ -18,9 +18,8 @@ pub enum CanvasError {
 pub struct Canvas {
     width: usize,
     height: usize,
-    pixels: Vec<u32>,  // Store palette indices instead of colors
-    #[serde(skip)]
-    palette: Arc<RwLock<Palette>>,
+    pixels: Vec<u32>,
+    palette: Palette,
 }
 
 
@@ -30,15 +29,12 @@ impl Canvas {
         if width == 0 || height == 0 {
             return Err(CanvasError::InvalidDimensions { width, height });
         }
-
-        let palette = Arc::new(RwLock::new(Palette::new()));
-        // White is always index 0 in new palette
         
         Ok(Self {
             width,
             height,
             pixels: vec![0; width * height],  // 0 = white
-            palette,
+            Palette::new(),
         })
     }
     
@@ -77,10 +73,7 @@ impl Canvas {
         }
 
         let index = y * self.width + x;
-        let color_index = {
-            let mut palette = self.palette.write().unwrap();
-            palette.add_color(color.to_hex().to_string())
-        };
+        let color_index = self.palette.add_color(color.to_hex().to_string());
         self.pixels[index] = color_index;
         Ok(())
     }
@@ -98,7 +91,7 @@ impl Canvas {
         let index = y * self.width + x;
         let color_index = self.pixels[index];
         let palette = self.palette.read().unwrap();
-        let hex = palette.get_color(color_index).unwrap_or("#FFFFFF");
+        let hex = self.palette.get_color(color_index).unwrap_or("#FFFFFF");
         Color::from_hex(hex).map_err(|_| CanvasError::OutOfBounds { width: self.width, height: self.height })
     }
 
@@ -109,7 +102,7 @@ impl Canvas {
     
     /// Get the palette
     pub fn palette(&self) -> Arc<RwLock<Palette>> {
-        self.palette.clone()
+        &self.palette
     }
 
     /// Resize the canvas to new dimensions, anchoring the existing content
