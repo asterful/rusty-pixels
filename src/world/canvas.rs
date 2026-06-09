@@ -2,9 +2,6 @@ use super::color::Color;
 use super::change::ResizeAnchor;
 use super::palette::Palette;
 use serde::{Serialize, Deserialize};
-use std::sync::Arc;
-use std::sync::RwLock;
-
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -34,7 +31,7 @@ impl Canvas {
             width,
             height,
             pixels: vec![0; width * height],  // 0 = white
-            Palette::new(),
+            Palette::new()
         })
     }
     
