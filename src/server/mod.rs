@@ -97,8 +97,7 @@ impl Server {
         
         // Get palette and pixel indices
         let pixels = world.canvas.pixels();
-        let palette_lock = world.canvas.palette();
-        let palette = palette_lock.read().unwrap();
+        let palette = world.canvas.palette();
         let palette_colors = palette.colors().to_vec();
         
         ServerMessage::Init {
