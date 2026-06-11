@@ -14,14 +14,14 @@ pub enum RollbackError {
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Snapshot {
     pub canvas: Canvas,
     pub change_count: usize,
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct History {
     pub snapshots: Vec<Snapshot>,
     pub changes: Vec<Change>,
