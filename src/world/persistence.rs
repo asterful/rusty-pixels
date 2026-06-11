@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 
 /// Save history to disk using binary format with atomic write
-pub fn save_history(history: &History) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_history(history: &History) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let history_file = crate::env::persistence_path();
     let temp_file = format!("{}.tmp", history_file);
     let backup_file = format!("{}.bak", history_file);
