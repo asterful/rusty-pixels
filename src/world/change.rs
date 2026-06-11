@@ -10,7 +10,7 @@ pub enum ResizeAnchor {
     Center,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum ChangeEvent {
     Paint {
         x: usize,
@@ -24,7 +24,7 @@ pub enum ChangeEvent {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Change {
     pub event: ChangeEvent,
     pub timestamp: u64,
