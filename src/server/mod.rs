@@ -69,11 +69,19 @@ impl Server {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(crate::env::autosave_interval()));
             loop {
                 interval.tick().await;
-                let world_lock = world_for_save.read().await;
-                if let Err(e) = crate::world::persistence::save_history(&world_lock.history) {
-                    eprintln!("Failed to save history: {}", e);
-                } else {
-                    println!("History saved to disk");
+                let history_snapshot = {
+                    let world_lock = world_for_save.read().await;
+                    world_lock.history.clone()
+                };
+
+                let save_result = tokio::task::spawn_blocking(move || {
+                    crate::world::persistence::save_history(&history_snapshot)
+                }).await;
+
+                match save_result {
+                    Ok(Ok(())) => println!("History saved to disk"),
+                    Ok(Err(e)) => eprintln!("Failed to save history: {}", e),
+                    Err(e) => eprintln!("Save task panicked or was cancelled: {}", e),
                 }
             }
         });
