@@ -66,25 +66,30 @@ impl Server {
         // Spawn periodic save task
         let world_for_save = self.world.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(crate::env::autosave_interval()));
+            let save_cooldown = tokio::time::Duration::from_secs(crate::env::autosave_interval());
             loop {
-                interval.tick().await;
+                // Wait out the cooldown period first
+                tokio::time::sleep(save_cooldown).await;
+
+                // Clone inside an isolated scope so the lock drops immediately
                 let history_snapshot = {
                     let world_lock = world_for_save.read().await;
                     world_lock.history.clone()
                 };
 
+                // Spawn the blocking disk write and wait for it to finish entirely
                 let save_result = tokio::task::spawn_blocking(move || {
                     crate::world::persistence::save_history(&history_snapshot)
                 }).await;
 
                 match save_result {
-                    Ok(Ok(())) => println!("History saved to disk"),
+                    Ok(Ok(())) => println!("History saved to disk successfully."),
                     Ok(Err(e)) => eprintln!("Failed to save history: {}", e),
                     Err(e) => eprintln!("Save task panicked or was cancelled: {}", e),
                 }
             }
         });
+        
 
         while let Ok((stream, addr)) = listener.accept().await {
             println!("New connection from {}", addr);
