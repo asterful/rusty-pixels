@@ -8,6 +8,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use messages::{ClientMessage, ServerMessage};
 use crate::world::{World, color::Color};
 
@@ -66,11 +67,20 @@ impl Server {
         // Spawn periodic save task
         let world_for_save = self.world.clone();
         tokio::spawn(async move {
-            let save_cooldown = tokio::time::Duration::from_secs(crate::env::autosave_interval());
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(crate::env::autosave_interval()));
+            let is_saving = Arc::new(AtomicBool::new(false));
+            
             loop {
-                // Wait out the cooldown period first
-                tokio::time::sleep(save_cooldown).await;
-
+                interval.tick().await;
+                
+                // Skip this save if one is already in progress
+                if is_saving.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+                    println!("Save already in progress, skipping this cycle");
+                    continue;
+                }
+                
+                let is_saving_clone = is_saving.clone();
+                
                 // Clone inside an isolated scope so the lock drops immediately
                 let history_snapshot = {
                     let world_lock = world_for_save.read().await;
@@ -83,10 +93,13 @@ impl Server {
                 }).await;
 
                 match save_result {
-                    Ok(Ok(())) => println!("History saved to disk successfully."),
+                    Ok(Ok(())) => println!("History saved to disk"),
                     Ok(Err(e)) => eprintln!("Failed to save history: {}", e),
                     Err(e) => eprintln!("Save task panicked or was cancelled: {}", e),
                 }
+                
+                // Mark save as complete
+                is_saving_clone.store(false, Ordering::SeqCst);
             }
         });
         
