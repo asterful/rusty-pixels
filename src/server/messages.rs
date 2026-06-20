@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::world::change::ResizeAnchor;
+use crate::history::change::ResizeAnchor;
 
 /// Messages sent from client to server
 #[derive(Debug, Clone, Serialize, Deserialize)]

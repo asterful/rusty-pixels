@@ -1,13 +1,10 @@
 pub mod canvas;
-pub mod change;
 pub mod color;
-pub mod history;
-pub mod persistence;
 pub mod palette;
 
 use canvas::{Canvas, CanvasError};
-use change::{Change, ChangeEvent};
-use history::History;
+use crate::history::change::{Change, ChangeEvent};
+use crate::history::History;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct World {
@@ -72,7 +69,7 @@ impl World {
 
     /// Rollback the world to a specific change index (destructive)
     /// Index is 0-based. Returns error if index is out of bounds.
-    pub fn rollback_to_index(&mut self, target_index: usize) -> Result<(), history::RollbackError> {
+    pub fn rollback_to_index(&mut self, target_index: usize) -> Result<(), crate::history::RollbackError> {
         self.history.rollback_to_index(target_index)?;
         // Reconstruct the canvas from the truncated history
         self.canvas = self.history.reconstruct_canvas();

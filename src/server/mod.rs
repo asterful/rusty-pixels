@@ -33,7 +33,7 @@ pub struct Server {
 
 impl Server {
     pub fn new(addr: impl Into<String>) -> Self {
-        let history = match crate::world::persistence::load_history() {
+        let history = match crate::history::persistence::load_history() {
             Ok(history) if !history.snapshots.is_empty() => {
                 println!("Loaded history from disk");
                 history
@@ -44,7 +44,7 @@ impl Server {
                     crate::env::default_canvas_width(),
                     crate::env::default_canvas_height()
                 ).expect("Failed to create canvas");
-                crate::world::history::History::new(
+                crate::history::History::new(
                     crate::env::default_snapshot_interval(),
                     &canvas
                 )
@@ -89,7 +89,7 @@ impl Server {
 
                 // Spawn the blocking disk write and wait for it to finish entirely
                 let save_result = tokio::task::spawn_blocking(move || {
-                    crate::world::persistence::save_history(&history_snapshot)
+                    crate::history::persistence::save_history(&history_snapshot)
                 }).await;
 
                 match save_result {
@@ -289,7 +289,7 @@ impl Server {
                 let color_for_broadcast = parsed_color.clone();
                 let result = {
                     let mut world_lock = world.write().await;
-                    let paint_event = crate::world::change::ChangeEvent::Paint {
+                    let paint_event = crate::history::change::ChangeEvent::Paint {
                         x,
                         y,
                         color: parsed_color,
@@ -351,7 +351,7 @@ impl Server {
                 // Apply the resize operation
                 let result = {
                     let mut world_lock = world.write().await;
-                    let resize_event = crate::world::change::ChangeEvent::Resize {
+                    let resize_event = crate::history::change::ChangeEvent::Resize {
                         anchor,
                         width,
                         height,

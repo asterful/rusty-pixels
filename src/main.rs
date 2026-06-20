@@ -1,6 +1,7 @@
 mod server;
 mod world;
 mod env;
+mod history;
 
 use server::Server;
 

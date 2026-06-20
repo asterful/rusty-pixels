@@ -1,6 +1,6 @@
-use super::color::Color;
-use super::change::ResizeAnchor;
-use super::palette::Palette;
+use crate::world::color::Color;
+use crate::history::change::ResizeAnchor;
+use crate::world::palette::Palette;
 use serde::{Serialize, Deserialize};
 
 #[allow(dead_code)]

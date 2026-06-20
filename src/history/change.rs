@@ -1,4 +1,4 @@
-use super::color::Color;
+use crate::world::color::Color;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

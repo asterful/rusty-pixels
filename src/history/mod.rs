@@ -1,5 +1,8 @@
-use super::canvas::Canvas;
-use super::change::Change;
+pub mod change;
+pub mod persistence;
+
+use crate::world::canvas::Canvas;
+use crate::history::change::Change;
 use serde::{Serialize, Deserialize};
 
 
@@ -73,7 +76,7 @@ impl History {
 
     /// Reconstruct a canvas from history by replaying all changes
     pub fn reconstruct_canvas(&self) -> Canvas {
-        use super::change::ChangeEvent;
+        use crate::history::change::ChangeEvent;
         
         // Always start from the last snapshot (there's always at least one)
         let snapshot = self.snapshots.last().expect("History must have at least one snapshot");

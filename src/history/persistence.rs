@@ -1,4 +1,4 @@
-use super::history::History;
+use crate::history::History;
 use std::fs::File;
 use std::io::{Read, Write};
 
