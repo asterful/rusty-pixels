@@ -1,5 +1,4 @@
 pub mod change;
-pub mod persistence;
 
 use crate::world::canvas::Canvas;
 use crate::history::change::Change;

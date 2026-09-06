@@ -78,14 +78,6 @@ pub fn default_snapshot_interval() -> usize {
     *DEFAULT_SNAPSHOT_INTERVAL.get().expect("Environment not initialized. Call env::init() first")
 }
 
-pub fn persistence_path() -> &'static str {
-    PERSISTENCE_PATH.get().expect("Environment not initialized. Call env::init() first")
-}
-
-pub fn autosave_interval() -> u64 {
-    *AUTOSAVE_INTERVAL.get().expect("Environment not initialized. Call env::init() first")
-}
-
 pub fn rate_limit_tokens() -> f64 {
     *RATE_LIMIT_TOKENS.get().expect("Environment not initialized. Call env::init() first")
 }

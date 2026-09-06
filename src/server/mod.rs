@@ -8,7 +8,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use messages::{ClientMessage, ServerMessage};
 use crate::world::{World, color::Color};
 
@@ -33,23 +32,16 @@ pub struct Server {
 
 impl Server {
     pub fn new(addr: impl Into<String>) -> Self {
-        let history = match crate::history::persistence::load_history() {
-            Ok(history) if !history.snapshots.is_empty() => {
-                println!("Loaded history from disk");
-                history
-            }
-            _ => {
-                println!("No valid history found, creating new world");
-                let canvas = crate::world::canvas::Canvas::new(
-                    crate::env::default_canvas_width(),
-                    crate::env::default_canvas_height()
-                ).expect("Failed to create canvas");
-                crate::history::History::new(
-                    crate::env::default_snapshot_interval(),
-                    &canvas
-                )
-            }
-        };
+        
+        let canvas = crate::world::canvas::Canvas::new(
+            crate::env::default_canvas_width(),
+            crate::env::default_canvas_height()
+        ).expect("Failed to create canvas");
+
+        let history = crate::history::History::new(
+            crate::env::default_snapshot_interval(),
+            &canvas
+        );
         
         let world = World::from(history);
         
@@ -63,45 +55,6 @@ impl Server {
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         let listener = TcpListener::bind(&self.addr).await?;
         println!("Server listening on {}", self.addr);
-
-        // Spawn periodic save task
-        let world_for_save = self.world.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(crate::env::autosave_interval()));
-            let is_saving = Arc::new(AtomicBool::new(false));
-            
-            loop {
-                interval.tick().await;
-                
-                // Skip this save if one is already in progress
-                if is_saving.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-                    println!("Save already in progress, skipping this cycle");
-                    continue;
-                }
-                
-                let is_saving_clone = is_saving.clone();
-                
-                // Clone inside an isolated scope so the lock drops immediately
-                let history_snapshot = {
-                    let world_lock = world_for_save.read().await;
-                    world_lock.history.clone()
-                };
-
-                // Spawn the blocking disk write and wait for it to finish entirely
-                let save_result = tokio::task::spawn_blocking(move || {
-                    crate::history::persistence::save_history(&history_snapshot)
-                }).await;
-
-                match save_result {
-                    Ok(Ok(())) => println!("History saved to disk"),
-                    Ok(Err(e)) => eprintln!("Failed to save history: {}", e),
-                    Err(e) => eprintln!("Save task panicked or was cancelled: {}", e),
-                }
-                
-                // Mark save as complete
-                is_saving_clone.store(false, Ordering::SeqCst);
-            }
-        });
         
 
         while let Ok((stream, addr)) = listener.accept().await {
