@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS event_types (
     name TEXT NOT NULL UNIQUE
 );
 
-INSERT OR IGNORE INTO event_types (id, name) VALUES (0, 'PAINT'), (1, 'RESIZE'), (2, 'ROLLBACK');
+INSERT OR IGNORE INTO event_types (id, name) VALUES (0, 'PAINT'), (1, 'RESIZE'), (2, 'ROLLBACK'), (3, 'INIT');
 
 
 CREATE TABLE IF NOT EXISTS events (
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS rollback_event (
 
 CREATE TABLE IF NOT EXISTS snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    last_event_id INTEGER,
+    last_event_id INTEGER NOT NULL,
     width INTEGER NOT NULL,
     height INTEGER NOT NULL,
     canvas_blob BLOB NOT NULL,
