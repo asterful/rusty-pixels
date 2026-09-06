@@ -32,14 +32,19 @@ pub struct Server {
 
 impl Server {
     pub fn new(addr: impl Into<String>) -> Self {
+        println!("DEBUG: Entering Server::new()");
+
+        println!("DEBUG: Opening history database...");
         
         let history = crate::history::History::open(
             crate::env::db_path(),
             crate::env::default_snapshot_interval()
         ).expect("Failed to open history database");
         
+        println!("DEBUG: Reconstructing world from history...");
         let world = World::from(history);
         
+        println!("DEBUG: Server struct built successfully.");
         Self {
             addr: addr.into(),
             clients: Arc::new(RwLock::new(HashMap::new())),

@@ -3,7 +3,17 @@ CREATE TABLE IF NOT EXISTS event_types (
     name TEXT NOT NULL UNIQUE
 );
 
-INSERT OR IGNORE INTO event_types (id, name) VALUES (0, 'PAINT'), (1, 'RESIZE'), (2, 'ROLLBACK'), (3, 'INIT');
+INSERT INTO event_types (id, name) 
+SELECT 0, 'PAINT' WHERE NOT EXISTS (SELECT 1 FROM event_types WHERE id = 0);
+
+INSERT INTO event_types (id, name) 
+SELECT 1, 'RESIZE' WHERE NOT EXISTS (SELECT 1 FROM event_types WHERE id = 1);
+
+INSERT INTO event_types (id, name) 
+SELECT 2, 'ROLLBACK' WHERE NOT EXISTS (SELECT 1 FROM event_types WHERE id = 2);
+
+INSERT INTO event_types (id, name) 
+SELECT 3, 'INIT' WHERE NOT EXISTS (SELECT 1 FROM event_types WHERE id = 3);
 
 
 CREATE TABLE IF NOT EXISTS events (

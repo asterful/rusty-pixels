@@ -36,6 +36,12 @@ pub struct History {
 impl History {
 
     pub fn open<P: AsRef<std::path::Path>>(db_path: P, snapshot_interval: usize) -> Result<Self, rusqlite::Error> {
+        if let Some(parent) = db_path.as_ref().parent() {
+            std::fs::create_dir_all(parent).map_err(|_| {
+                rusqlite::Error::InvalidPath(db_path.as_ref().to_path_buf())
+            })?;
+        }
+
         let conn = rusqlite::Connection::open(db_path)?;
 
         // Enable WAL mode and foreign keys
@@ -47,6 +53,27 @@ impl History {
         conn.execute_batch(SCHEMA_SQL)?;
 
         let conn_arc = Arc::new(Mutex::new(conn));
+
+        let initial_count: usize = conn_arc
+            .lock()
+            .unwrap()
+            .query_row("SELECT COALESCE(MAX(id), 0) FROM events", [], |row| row.get::<_, i64>(0))
+            .map(|val| val as usize)
+            .unwrap_or(0);
+
+        // Seed initial event and snapshot if the database is completely empty
+        if initial_count == 0 {
+            let mut conn = conn_arc.lock().unwrap();
+            let default_canvas = Canvas::new(100, 100).expect("Failed to create default canvas");
+            let init_change = Change {
+                event: ChangeEvent::Init { width: 100, height: 100 },
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+            };
+            let _ = Self::write_change_to_db(&mut conn, &init_change, Some(&default_canvas));
+        }
 
         let initial_count: usize = conn_arc
             .lock()
@@ -153,14 +180,19 @@ impl History {
         let _ = self.tx.send((change, canvas_snapshot));
     }
 
+    /// Get the latest snapshot before or at the given target event ID
+    pub fn latest_snapshot_before(&self, target_event_id: i64) -> Result<Option<(i64, Canvas)>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        Self::latest_snapshot_before_conn(&conn, target_event_id)
+    }
+    
     /// Get the current number of changes
     pub fn current_change_count(&self) -> usize {
         self.event_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Get the latest snapshot before or at the given target event ID
-    pub fn latest_snapshot_before(&self, target_event_id: i64) -> Result<Option<(i64, Canvas)>, rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
+    // Internal helper that accepts an active connection borrow to prevent deadlocks
+    fn latest_snapshot_before_conn(conn: &rusqlite::Connection, target_event_id: i64) -> Result<Option<(i64, Canvas)>, rusqlite::Error> {
         let mut stmt = conn.prepare(
             "SELECT last_event_id, canvas_blob FROM snapshots WHERE last_event_id <= ?1 ORDER BY last_event_id DESC LIMIT 1"
         )?;
@@ -182,8 +214,8 @@ impl History {
     pub fn reconstruct_canvas(&self) -> Canvas {
         let conn = self.conn.lock().unwrap();
 
-        // Always start from the latest snapshot in the database
-        let (last_event_id, mut canvas) = match self.latest_snapshot_before(i64::MAX) {
+        // Always start from the latest snapshot in the database using the internal helper
+        let (last_event_id, mut canvas) = match Self::latest_snapshot_before_conn(&conn, i64::MAX) {
             Ok(Some((id, cv))) => (id, cv),
             _ => panic!("History must have at least one snapshot"),
         };
