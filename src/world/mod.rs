@@ -30,7 +30,6 @@ impl World {
 
     /// Apply a change event to the world
     pub fn apply_event(&mut self, event: ChangeEvent) -> Result<(), CanvasError> {
-
         match &event {
             ChangeEvent::Paint { x, y, color } => {
                 self.canvas.set_pixel(*x, *y, color.clone())?;
@@ -38,13 +37,15 @@ impl World {
             ChangeEvent::Resize { anchor, width, height } => {
                 self.canvas.resize(*width, *height, *anchor)?;
             }
+            _ => {}
         }
 
         let change = Change {
             event,
             timestamp: self.get_current_timestamp(),
         };
-        self.history.record_change(change, &self.canvas);
+
+        let _ = self.history.record_change(change, &self.canvas);
 
         Ok(())
     }

@@ -90,6 +90,9 @@ impl History {
                 ChangeEvent::Resize { anchor, width, height } => {
                     let _ = canvas.resize(*width, *height, *anchor);
                 }
+                ChangeEvent::Init { .. } | ChangeEvent::Rollback { .. } => {
+                    // Non-canvas-mutating events; ignore during replay
+                }
             }
         }
         
