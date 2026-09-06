@@ -2,3 +2,6 @@
 *.bin
 *.bin.bak
 .env
+*.db
+*.db-wal
+*.db-shm
