@@ -33,11 +33,6 @@ pub struct Server {
 impl Server {
     pub fn new(addr: impl Into<String>) -> Self {
         
-        let canvas = crate::world::canvas::Canvas::new(
-            crate::env::default_canvas_width(),
-            crate::env::default_canvas_height()
-        ).expect("Failed to create canvas");
-
         let history = crate::history::History::open(
             crate::env::db_path(),
             crate::env::default_snapshot_interval()
