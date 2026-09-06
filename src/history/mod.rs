@@ -3,9 +3,9 @@ pub mod change;
 use std::sync::Mutex;
 use std::sync::Arc;
 
+use crate::history::change::ChangeEvent;
 use crate::world::canvas::Canvas;
 use crate::history::change::Change;
-use serde::{Serialize, Deserialize};
 use tokio::sync::mpsc::UnboundedSender;
 
 
@@ -17,13 +17,6 @@ pub enum RollbackError {
         #[allow(dead_code)]
         max: usize,
     },
-}
-
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Snapshot {
-    pub canvas: Canvas,
-    pub change_count: usize,
 }
 
 
@@ -54,16 +47,18 @@ impl History {
         let initial_count: usize = conn_arc
             .lock()
             .unwrap()
-            .query_row("SELECT COALESCE(MAX(id), 0) FROM events", [], |row| row.get(0))
+            .query_row("SELECT COALESCE(MAX(id), 0) FROM events", [], |row| row.get::<_, i64>(0))
+            .map(|val| val as usize)
             .unwrap_or(0);
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(Change, Option<Canvas>)>();
 
         let writer_conn = Arc::clone(&conn_arc);
         std::thread::spawn(move || {
-            while let Some((_change, _snapshot)) = rx.blocking_recv() {
-                //let mut conn = writer_conn.lock().unwrap();
-                //let _ = Self::write_change_to_db(&mut conn, change, snapshot);
+            while let Some((_change, _canvas)) = rx.blocking_recv() {
+                if let Ok(mut conn) = writer_conn.lock() {
+                    let _ = Self::write_change_to_db(&mut conn, &_change, _canvas.as_ref());
+                }
             }
         });
 
@@ -75,19 +70,65 @@ impl History {
         })
     }
 
-    /* 
-    /// Create a new history tracker with the specified snapshot interval
-    pub fn new(snapshot_interval: usize, initial_canvas: &Canvas) -> Self {
-        // Open an in-memory SQLite database for ephemeral use
-        let history = Self::open(":memory:", snapshot_interval)
-            .expect("Failed to create in-memory history database");
+    fn write_change_to_db(
+        conn: &mut rusqlite::Connection,
+        change: &Change,
+        canvas: Option<&Canvas>,
+    ) -> Result<i64, rusqlite::Error> {
+        let tx = conn.transaction()?;
 
-        // If you need to record an initial state or init event, 
-        // you can handle it here or let your application initialization handle it.
+        let event_type_id = match &change.event {
+            ChangeEvent::Init { .. } => 3,
+            ChangeEvent::Paint { .. } => 0,
+            ChangeEvent::Resize { .. } => 1,
+            ChangeEvent::Rollback { .. } => 2,
+        };
 
-        history
+        tx.execute(
+            "INSERT INTO events (event_type_id, created_at) VALUES (?1, ?2)",
+            rusqlite::params![event_type_id, change.timestamp as i64],
+        )?;
+        let event_id = tx.last_insert_rowid();
+
+        match &change.event {
+            ChangeEvent::Init { .. } => {}
+            ChangeEvent::Paint { x, y, color } => {
+                tx.execute(
+                    "INSERT INTO paint_event (event_id, x, y, color_hex) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![event_id, *x as i64, *y as i64, color.to_hex().to_string()],
+                )?;
+            }
+            ChangeEvent::Resize { anchor, width, height } => {
+                tx.execute(
+                    "INSERT INTO resize_event (event_id, width, height, anchor_type) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![event_id, *width as i64, *height as i64, *anchor as u8],
+                )?;
+            }
+            ChangeEvent::Rollback { target_event_id } => {
+                tx.execute(
+                    "INSERT INTO rollback_event (event_id, target_event_id) VALUES (?1, ?2)",
+                    rusqlite::params![event_id, target_event_id],
+                )?;
+            }
+        }
+
+        if let Some(canvas) = canvas {
+            let canvas_bytes = bincode::serialize(canvas).unwrap_or_default();
+            tx.execute(
+                "INSERT INTO snapshots (last_event_id, width, height, canvas_blob) VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    event_id,
+                    canvas.width() as i64,
+                    canvas.height() as i64,
+                    canvas_bytes
+                ],
+            )?;
+        }
+
+        tx.commit()?;
+        Ok(event_id)
     }
-    */
+
 
     /// Record a new change and create a snapshot if needed
     pub fn record_change(&mut self, change: Change, current_canvas: &Canvas) {
