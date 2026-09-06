@@ -1,8 +1,12 @@
 pub mod change;
 
+use std::sync::Mutex;
+use std::sync::Arc;
+
 use crate::world::canvas::Canvas;
 use crate::history::change::Change;
 use serde::{Serialize, Deserialize};
+use tokio::sync::mpsc::UnboundedSender;
 
 
 #[derive(Debug)]
@@ -23,29 +27,67 @@ pub struct Snapshot {
 }
 
 
-#[derive(Serialize, Deserialize, Clone)]
 pub struct History {
-    pub snapshots: Vec<Snapshot>,
-    pub changes: Vec<Change>,
+    tx: UnboundedSender<(Change, Option<Canvas>)>,
+    conn: Arc<Mutex<rusqlite::Connection>>,
     snapshot_interval: usize,
+    event_count: std::sync::atomic::AtomicUsize,
 }
 
 
 #[allow(dead_code)]
 impl History {
+
+    pub fn open<P: AsRef<std::path::Path>>(db_path: P, snapshot_interval: usize) -> Result<Self, rusqlite::Error> {
+        let conn = rusqlite::Connection::open(db_path)?;
+
+        // Enable WAL mode and foreign keys
+        conn.pragma_update(None, "journal_mode", "WAL")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        // Executes schema.sql (tables are created only if they don't exist yet)
+        const SCHEMA_SQL: &str = include_str!("sql/schema.sql");
+        conn.execute_batch(SCHEMA_SQL)?;
+
+        let conn_arc = Arc::new(Mutex::new(conn));
+
+        let initial_count: usize = conn_arc
+            .lock()
+            .unwrap()
+            .query_row("SELECT COALESCE(MAX(id), 0) FROM events", [], |row| row.get(0))
+            .unwrap_or(0);
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(Change, Option<Canvas>)>();
+
+        let writer_conn = Arc::clone(&conn_arc);
+        std::thread::spawn(move || {
+            while let Some((_change, _snapshot)) = rx.blocking_recv() {
+                //let mut conn = writer_conn.lock().unwrap();
+                //let _ = Self::write_change_to_db(&mut conn, change, snapshot);
+            }
+        });
+
+        Ok(Self {
+            tx,
+            conn: conn_arc,
+            snapshot_interval,
+            event_count: std::sync::atomic::AtomicUsize::new(initial_count),
+        })
+    }
+
+    /* 
     /// Create a new history tracker with the specified snapshot interval
     pub fn new(snapshot_interval: usize, initial_canvas: &Canvas) -> Self {
-        let initial_snapshot = Snapshot {
-            canvas: initial_canvas.clone(),
-            change_count: 0,
-        };
-        
-        History {
-            changes: Vec::new(),
-            snapshots: vec![initial_snapshot],
-            snapshot_interval,
-        }
+        // Open an in-memory SQLite database for ephemeral use
+        let history = Self::open(":memory:", snapshot_interval)
+            .expect("Failed to create in-memory history database");
+
+        // If you need to record an initial state or init event, 
+        // you can handle it here or let your application initialization handle it.
+
+        history
     }
+    */
 
     /// Record a new change and create a snapshot if needed
     pub fn record_change(&mut self, change: Change, current_canvas: &Canvas) {

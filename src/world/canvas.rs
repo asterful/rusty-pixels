@@ -10,6 +10,14 @@ pub enum CanvasError {
     InvalidDimensions { width: usize, height: usize },
 }
 
+impl std::fmt::Display for CanvasError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Canvas error occurred") 
+    }
+}
+
+impl std::error::Error for CanvasError {}
+
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Canvas {

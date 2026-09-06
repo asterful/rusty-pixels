@@ -38,10 +38,10 @@ impl Server {
             crate::env::default_canvas_height()
         ).expect("Failed to create canvas");
 
-        let history = crate::history::History::new(
-            crate::env::default_snapshot_interval(),
-            &canvas
-        );
+        let history = crate::history::History::open(
+            crate::env::db_path(),
+            crate::env::default_snapshot_interval()
+        ).expect("Failed to open history database");
         
         let world = World::from(history);
         

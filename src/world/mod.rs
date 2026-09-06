@@ -15,9 +15,9 @@ pub struct World {
 #[allow(dead_code)]
 impl World {
     /// Create a new world with the given canvas dimensions and history snapshot interval
-    pub fn new(width: usize, height: usize, snapshot_interval: usize) -> Result<Self, CanvasError> {
+    pub fn new(width: usize, height: usize, snapshot_interval: usize) -> Result<Self, Box<dyn std::error::Error>> {
         let canvas = Canvas::new(width, height)?;
-        let history = History::new(snapshot_interval, &canvas);
+        let history = History::open(crate::env::db_path(), snapshot_interval)?;
 
         Ok(World { canvas, history })
     }
