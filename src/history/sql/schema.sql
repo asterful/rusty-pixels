@@ -8,7 +8,7 @@ INSERT OR IGNORE INTO event_types (id, name) VALUES (0, 'PAINT'), (1, 'RESIZE'),
 
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type_id INTEGER NOT NULL,,
+    event_type_id INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     FOREIGN KEY(event_type_id) REFERENCES event_types(id)
 );

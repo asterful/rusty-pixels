@@ -12,13 +12,17 @@ use tokio::sync::mpsc::UnboundedSender;
 #[derive(Debug)]
 pub enum RollbackError {
     IndexOutOfBounds {
-        #[allow(dead_code)]
         target: usize,
-        #[allow(dead_code)]
         max: usize,
     },
+    Database(rusqlite::Error),
 }
 
+impl From<rusqlite::Error> for RollbackError {
+    fn from(err: rusqlite::Error) -> Self {
+        RollbackError::Database(err)
+    }
+}
 
 pub struct History {
     tx: UnboundedSender<(Change, Option<Canvas>)>,
@@ -130,80 +134,136 @@ impl History {
     }
 
 
-    /// Record a new change and create a snapshot if needed
+    /// Record a new change and send it to the background writer thread,
+    /// forcing a snapshot for resize/rollback events or regular intervals.
     pub fn record_change(&mut self, change: Change, current_canvas: &Canvas) {
-        self.changes.push(change);
-        
-        if self.changes.len() % self.snapshot_interval == 0 {
-            let snapshot = Snapshot {
-                canvas: current_canvas.clone(),
-                change_count: self.changes.len(),
-            };
-            self.snapshots.push(snapshot);
-        }
+        let current_count = self.event_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+
+        let force_snapshot = matches!(
+            change.event,
+            ChangeEvent::Resize { .. } | ChangeEvent::Rollback { .. }
+        );
+
+        let canvas_snapshot = if force_snapshot || (current_count % self.snapshot_interval == 0) {
+            Some(current_canvas.clone())
+        } else {
+            None
+        };
+
+        let _ = self.tx.send((change, canvas_snapshot));
     }
 
     /// Get the current number of changes
     pub fn current_change_count(&self) -> usize {
-        self.changes.len()
+        self.event_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    /// Get the latest snapshot before or at the given change index
-    pub fn latest_snapshot_before(&self, change_index: usize) -> Option<&Snapshot> {
-        self.snapshots
-            .iter()
-            .filter(|s| s.change_count <= change_index)
-            .max_by_key(|s| s.change_count)
+    /// Get the latest snapshot before or at the given target event ID
+    pub fn latest_snapshot_before(&self, target_event_id: i64) -> Result<Option<(i64, Canvas)>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT last_event_id, canvas_blob FROM snapshots WHERE last_event_id <= ?1 ORDER BY last_event_id DESC LIMIT 1"
+        )?;
+        
+        let mut rows = stmt.query(rusqlite::params![target_event_id])?;
+        if let Some(row) = rows.next()? {
+            let last_event_id: i64 = row.get(0)?;
+            let blob: Vec<u8> = row.get(1)?;
+            let canvas: Canvas = bincode::deserialize(&blob).map_err(|_| {
+                rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Blob, Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to deserialize canvas blob")))
+            })?;
+            Ok(Some((last_event_id, canvas)))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Reconstruct a canvas from history by replaying all changes
     pub fn reconstruct_canvas(&self) -> Canvas {
-        use crate::history::change::ChangeEvent;
-        
-        // Always start from the last snapshot (there's always at least one)
-        let snapshot = self.snapshots.last().expect("History must have at least one snapshot");
-        let mut canvas = snapshot.canvas.clone();
-        
-        // Replay changes since the snapshot
-        for change in &self.changes[snapshot.change_count..] {
-            match &change.event {
-                ChangeEvent::Paint { x, y, color } => {
-                    let _ = canvas.set_pixel(*x, *y, color.clone());
+        let conn = self.conn.lock().unwrap();
+
+        // Always start from the latest snapshot in the database
+        let (last_event_id, mut canvas) = match self.latest_snapshot_before(i64::MAX) {
+            Ok(Some((id, cv))) => (id, cv),
+            _ => panic!("History must have at least one snapshot"),
+        };
+
+        // Query all changes since that snapshot ID from the database
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT 
+                e.event_type_id,
+                p.x, p.y, p.color_hex,
+                r.anchor_type, r.width, r.height
+            FROM events e
+            LEFT JOIN paint_event p ON e.id = p.event_id
+            LEFT JOIN resize_event r ON e.id = r.event_id
+            WHERE e.id > ?1
+            ORDER BY e.id ASC
+            "#
+        ).expect("Failed to prepare canvas reconstruction query");
+
+        let mut rows = stmt.query(rusqlite::params![last_event_id]).expect("Failed to execute reconstruction query");
+
+        while let Some(row) = rows.next().expect("Failed to fetch event row") {
+            let event_type_id: i64 = row.get(0).expect("Failed to get event_type_id");
+
+            match event_type_id {
+                0 => { // PAINT
+                    let x: usize = row.get::<_, i64>(1).unwrap() as usize;
+                    let y: usize = row.get::<_, i64>(2).unwrap() as usize;
+                    let hex_str: String = row.get(3).unwrap();
+                    let color = crate::world::color::Color::from_hex(&hex_str)
+                        .expect("Failed to parse color hex from database");
+                    let _ = canvas.set_pixel(x, y, color);
                 }
-                ChangeEvent::Resize { anchor, width, height } => {
-                    let _ = canvas.resize(*width, *height, *anchor);
+                1 => { // RESIZE
+                    let anchor_val: u8 = row.get::<_, i64>(4).unwrap() as u8;
+                    let anchor = crate::history::change::ResizeAnchor::from_u8(anchor_val);
+                    let width: usize = row.get::<_, i64>(5).unwrap() as usize;
+                    let height: usize = row.get::<_, i64>(6).unwrap() as usize;
+                    let _ = canvas.resize(width, height, anchor);
                 }
-                ChangeEvent::Init { .. } | ChangeEvent::Rollback { .. } => {
-                    // Non-canvas-mutating events; ignore during replay
-                }
+                _ => {}
             }
         }
-        
+
         canvas
     }
 
     /// Rollback to a specific change index (destructive)
     /// Index is 0-based. Truncates all changes after target_index.
     pub fn rollback_to_index(&mut self, target_index: usize) -> Result<(), RollbackError> {
-        if target_index >= self.changes.len() {
+        let target_id = target_index as i64;
+        let mut conn = self.conn.lock().unwrap();
+
+        let max_id: i64 = conn
+            .query_row("SELECT COALESCE(MAX(id), 0) FROM events", [], |row| row.get(0))
+            .unwrap_or(0);
+
+        if target_id < 1 || target_id > max_id {
             return Err(RollbackError::IndexOutOfBounds {
                 target: target_index,
-                max: self.changes.len().saturating_sub(1),
+                max: max_id.max(1) as usize - 1,
             });
         }
-        
-        // Truncate changes to keep only up to and including target
-        self.changes.truncate(target_index + 1);
-        let new_change_count = self.changes.len();
-        
-        // Remove snapshots that are after the new change count
-        self.snapshots.retain(|snapshot| snapshot.change_count <= new_change_count);
-        
-        // Ensure we always have at least the initial snapshot
-        if self.snapshots.is_empty() {
-            panic!("History must always have at least one snapshot");
-        }
-        
+
+        let tx = conn.transaction()?;
+
+        // Delete events after target_id. Cascades to paint_event, resize_event, rollback_event, and snapshots.
+        tx.execute(
+            "DELETE FROM events WHERE id > ?1",
+            rusqlite::params![target_id],
+        )?;
+
+        tx.commit()?;
+
+        let new_max: usize = conn
+            .query_row("SELECT COALESCE(MAX(id), 0) FROM events", [], |row| row.get::<_, i64>(0))
+            .map(|v| v as usize)
+            .unwrap_or(0);
+        self.event_count.store(new_max, std::sync::atomic::Ordering::SeqCst);
+
         Ok(())
     }
 }
